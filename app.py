@@ -26,32 +26,31 @@ def home():
 @app.route('/chat', methods=['POST'])
 def chat():
     try:
-        data = request.json
-        user_input = data.get('message', '')
+        user_message = request.json.get('message')
+        print(f"Received message: {user_message}")  # 调试日志
         
-        if not user_input:
-            return jsonify({'error': 'No message provided'}), 400
-
         # 调用 SageMaker 端点
         response = sagemaker_runtime.invoke_endpoint(
             EndpointName=endpoint_name,
             ContentType='application/json',
-            Body=json.dumps({'inputs': user_input})
+            Body=json.dumps({'inputs': user_message})
         )
         
         # 解析响应
-        result = json.loads(response['Body'].read().decode())
+        response_body = json.loads(response['Body'].read().decode())
+        print(f"SageMaker response: {response_body}")  # 调试日志
         
         return jsonify({
-            'response': result,
-            'status': 'success'
+            'status': 'success',
+            'response': response_body['response'] if isinstance(response_body, dict) else str(response_body)
         })
-
+        
     except Exception as e:
+        print(f"Error: {str(e)}")  # 调试日志
         return jsonify({
-            'error': str(e),
-            'status': 'error'
-        }), 500
+            'status': 'error',
+            'error': str(e)
+        })
 
 if __name__ == '__main__':
     app.run(debug=True)

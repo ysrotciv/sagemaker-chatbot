@@ -104,7 +104,11 @@
                 const data = await response.json();
                 
                 if (data.status === 'success') {
-                    addMessage(data.response, false);
+                    // 确保我们显示实际的响应文本
+                    const botResponse = typeof data.response === 'object' 
+                        ? JSON.stringify(data.response) 
+                        : data.response;
+                    addMessage(botResponse, false);
                 } else {
                     addMessage('Error: ' + data.error, false);
                 }
