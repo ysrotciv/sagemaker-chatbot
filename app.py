@@ -53,25 +53,31 @@ def upload_file():
 
         for file in files:
             if file and allowed_file(file.filename):
+                # 打印文件信息
+                print(f"上传文件: {file.filename}")
+                print(f"文件类型: {file.content_type}")
+                
                 filename = secure_filename(file.filename)
                 file_id = str(uuid.uuid4())
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], file_id)
+                
+                # 以二进制模式保存文件
                 file.save(file_path)
                 
-                # 存储文件信息
                 uploaded_files[file_id] = {
                     'name': filename,
                     'path': file_path,
+                    'content_type': file.content_type,
                     'upload_time': datetime.now().isoformat(),
                     'processed': False
                 }
                 
-                # 处理文档（可以在这里添加文档处理逻辑）
                 process_document(file_id)
                 
                 uploaded.append({
                     'id': file_id,
-                    'name': filename
+                    'name': filename,
+                    'type': file.content_type
                 })
 
         return jsonify({
@@ -80,7 +86,12 @@ def upload_file():
         })
 
     except Exception as e:
-        return jsonify({'status': 'error', 'error': str(e)})
+        import traceback
+        return jsonify({
+            'status': 'error', 
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        })
 
 @app.route('/remove-file/<file_id>', methods=['DELETE'])
 def remove_file(file_id):
@@ -95,19 +106,43 @@ def remove_file(file_id):
     except Exception as e:
         return jsonify({'status': 'error', 'error': str(e)})
 
+def read_file_content(file_path):
+    """安全地读取文件内容，处理不同的编码"""
+    encodings = ['utf-8', 'gbk', 'gb2312', 'iso-8859-1', 'latin1']
+    
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                return f.read()
+        except UnicodeDecodeError:
+            continue
+    
+    # 如果所有文本编码都失败，尝试二进制读取
+    try:
+        with open(file_path, 'rb') as f:
+            return f.read().decode('utf-8', errors='ignore')
+    except Exception as e:
+        print(f"无法读取文件 {file_path}: {str(e)}")
+        return ""
+
 def process_document(file_id):
     """处理上传的文档，例如提取文本、创建嵌入等"""
     try:
         file_info = uploaded_files[file_id]
         file_path = file_info['path']
         
-        # 这里添加文档处理逻辑
-        # 例如：提取文本、创建嵌入、存储到向量数据库等
-        
-        file_info['processed'] = True
+        # 尝试读取文件内容以验证编码
+        content = read_file_content(file_path)
+        if content:
+            print(f"成功处理文档 {file_info['name']}, 内容长度: {len(content)}")
+            file_info['processed'] = True
+        else:
+            print(f"无法处理文档 {file_info['name']}")
+            file_info['processed'] = False
         
     except Exception as e:
         print(f"处理文档时出错: {str(e)}")
+        file_info['processed'] = False
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -152,8 +187,14 @@ def doc_chat():
         documents_content = []
         for doc_id in document_ids:
             if doc_id in uploaded_files and uploaded_files[doc_id]['processed']:
-                with open(uploaded_files[doc_id]['path'], 'r') as f:
-                    documents_content.append(f.read())
+                content = read_file_content(uploaded_files[doc_id]['path'])
+                if content:
+                    documents_content.append(content)
+        
+        # 打印调试信息
+        print(f"处理的文档数量: {len(documents_content)}")
+        for i, content in enumerate(documents_content):
+            print(f"文档 {i+1} 长度: {len(content)} 字符")
         
         # 调用 SageMaker 端点进行文档问答
         response = sagemaker_runtime.invoke_endpoint(
@@ -177,9 +218,13 @@ def doc_chat():
         })
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"错误详情: {error_details}")
         return jsonify({
             'status': 'error',
-            'error': str(e)
+            'error': str(e),
+            'details': error_details
         })
 
 if __name__ == '__main__':
