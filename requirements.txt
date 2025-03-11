@@ -1,5 +1,8 @@
-flask==2.0.1
-boto3==1.26.137
-sagemaker==2.151.0
+flask==3.0.1
+boto3==1.37.10
+sagemaker==2.241.0
 python-dotenv==1.0.0
 requests==2.31.0
+werkzeug==2.0.1
+PyPDF2==3.0.1
+python-docx==0.8.11

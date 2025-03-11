@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- ... 原有的 head 内容 ... -->
+    <style>
+        /* ... 原有的样式 ... */
+        .tabs {
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border: none;
+            background-color: #f0f0f0;
+            cursor: pointer;
+        }
+        .tab-button.active {
+            background-color: #2196f3;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .file-upload {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .uploaded-files {
+            margin-bottom: 20px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: #f5f5f5;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <h1>SageMaker Chatbot</h1>
+        
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('general')">一般问答</button>
+            <button class="tab-button" onclick="switchTab('document')">文档问答</button>
+        </div>
+
+        <div id="general-chat" class="tab-content active">
+            <!-- 原有的聊天界面 -->
+            <div class="messages" id="messages"></div>
+            <div class="input-container">
+                <input type="text" id="userInput" placeholder="Type your message here...">
+                <button onclick="sendMessage('general')">Send</button>
+            </div>
+        </div>
+
+        <div id="document-chat" class="tab-content">
+            <div class="file-upload">
+                <input type="file" id="fileInput" multiple accept=".pdf,.txt,.doc,.docx">
+                <button onclick="uploadFiles()">Upload Files</button>
+            </div>
+            <div class="uploaded-files" id="uploadedFiles">
+                <!-- 上传的文件列表会显示在这里 -->
+            </div>
+            <div class="messages" id="docMessages"></div>
+            <div class="input-container">
+                <input type="text" id="docUserInput" placeholder="Ask questions about your documents...">
+                <button onclick="sendMessage('document')">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let uploadedDocuments = [];
+
+        function switchTab(tabName) {
+            // 切换标签页
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            document.querySelector(`button[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            document.getElementById(`${tabName}-chat`).classList.add('active');
+        }
+
+        function uploadFiles() {
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            for (let file of files) {
+                formData.append('files', file);
+            }
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    uploadedDocuments = uploadedDocuments.concat(data.files);
+                    updateFilesList();
+                    addMessage('Files uploaded successfully!', false, 'docMessages');
+                } else {
+                    addMessage('Error uploading files: ' + data.error, false, 'docMessages');
+                }
+            })
+            .catch(error => {
+                addMessage('Error uploading files: ' + error, false, 'docMessages');
+            });
+        }
+
+        function updateFilesList() {
+            const filesDiv = document.getElementById('uploadedFiles');
+            filesDiv.innerHTML = uploadedDocuments.map(file => `
+                <div class="file-item">
+                    <span>${file.name}</span>
+                    <button onclick="removeFile('${file.id}')">Remove</button>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(fileId) {
+            fetch(`/remove-file/${fileId}`, { method: 'DELETE' })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    uploadedDocuments = uploadedDocuments.filter(f => f.id !== fileId);
+                    updateFilesList();
+                }
+            });
+        }
+
+        async function sendMessage(type) {
+            const inputElement = document.getElementById(type === 'general' ? 'userInput' : 'docUserInput');
+            const message = inputElement.value.trim();
+            
+            if (!message) return;
+
+            const messagesDiv = type === 'general' ? 'messages' : 'docMessages';
+            addMessage(message, true, messagesDiv);
+            inputElement.value = '';
+
+            try {
+                const response = await fetch(type === 'general' ? '/chat' : '/doc-chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        message: message,
+                        documents: type === 'document' ? uploadedDocuments.map(d => d.id) : undefined
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    addMessage(data.response, false, messagesDiv);
+                } else {
+                    addMessage('Error: ' + data.error, false, messagesDiv);
+                }
+            } catch (error) {
+                addMessage('Error: Could not connect to the server', false, messagesDiv);
+            }
+        }
+
+        function addMessage(message, isUser, containerId) {
+            const messagesDiv = document.getElementById(containerId);
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
+            messageDiv.textContent = message;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    </script>
+</body>
+</html> 
