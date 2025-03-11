@@ -44,6 +44,7 @@
             border-radius: 5px;
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div class="chat-container">
@@ -184,10 +185,49 @@
             const messagesDiv = document.getElementById(containerId);
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isUser ? 'user-message' : 'bot-message'}`;
-            messageDiv.textContent = message;
+            
+            if (typeof message === 'string') {
+                if (isUser) {
+                    // 用户消息使用普通文本
+                    messageDiv.innerHTML = message
+                        .replace(/\n/g, '<br>')
+                        .replace(/\r/g, '<br>');
+                } else {
+                    // 机器人响应使用 Markdown 渲染
+                    messageDiv.innerHTML = marked.parse(message);
+                }
+            } else {
+                messageDiv.textContent = JSON.stringify(message);
+            }
+            
             messagesDiv.appendChild(messageDiv);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
+
+        // 添加样式以确保代码块正确显示
+        const style = document.createElement('style');
+        style.textContent = `
+            .message pre {
+                background-color: #f8f8f8;
+                padding: 10px;
+                border-radius: 4px;
+                overflow-x: auto;
+            }
+            .message code {
+                font-family: monospace;
+                background-color: #f0f0f0;
+                padding: 2px 4px;
+                border-radius: 3px;
+            }
+            .message p {
+                margin: 0 0 10px 0;
+            }
+            .message ul, .message ol {
+                margin: 0;
+                padding-left: 20px;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html> 
